@@ -4,29 +4,27 @@ Shared Go module containing the DTOs used for async inter-microservice communica
 
 ## Purpose
 
-This module acts as a contract layer between microservices. Each DTO defines the shape of a message exchanged over a messaging system (RabbitMQ, and potentially others in the future). Keeping them in a single shared module ensures all producers and consumers stay in sync.
+This module acts as a contract layer between microservices. Each DTO defines the shape of a message exchanged over Kafka. Keeping them in a single shared module ensures all producers and consumers stay in sync.
 
 ## Package Structure
 
 ```
 shared/
 └── messaging/
-    └── rabbitmq/
+    └── kafka/
         └── dtos/
             ├── welcome_email.go
             └── user_logged_in.go
 ```
 
-New messaging systems (e.g. Kafka) should follow the same layout under `messaging/<system>/dtos/`.
-
 ## DTOs
 
-### RabbitMQ — `messaging/rabbitmq/dtos`
+### Kafka — `messaging/kafka/dtos`
 
-| Struct | Exchange | Routing Key | Published by | Consumed by |
-|---|---|---|---|---|
-| `WelcomeEmail` | `auth.events` | `user.created` | auth | email |
-| `UserLoggedIn` | `auth.events` | `user.logged_in` | auth | broadcasting |
+| Struct | Topic | Published by | Consumed by |
+|---|---|---|---|
+| `WelcomeEmail` | `user.created` | auth | email |
+| `UserLoggedIn` | `user.logged_in` | auth | broadcasting |
 
 #### `WelcomeEmail`
 
@@ -52,12 +50,12 @@ type UserLoggedIn struct {
 Import the module using its Go module path:
 
 ```go
-import dtos "github.com/guille1988/go-app-shared/messaging/rabbitmq/dtos"
+import dtos "github.com/guille1988/go-app-shared/messaging/kafka/dtos"
 ```
 
 ## Extending
 
-To add a new messaging system, create the corresponding directory and package:
+To add a new DTO, create the corresponding file under `messaging/kafka/dtos/`:
 
 ```
 messaging/
@@ -66,4 +64,4 @@ messaging/
         └── some_event.go   // package dtos
 ```
 
-Follow the same struct + JSON tag conventions used in the RabbitMQ DTOs.
+Follow the same struct + JSON tag conventions used in the existing DTOs.
