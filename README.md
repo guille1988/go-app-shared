@@ -1,67 +1,48 @@
 # go-app-shared
 
-Shared Go module containing the DTOs used for async inter-microservice communication across the go-app platform.
+The versioned Kafka contract shared by [`auth`](https://github.com/guille1988/auth), [`email`](https://github.com/guille1988/email), and [`broadcasting`](https://github.com/guille1988/broadcasting) — the DTOs and routing keys that flow between them.
 
-## Purpose
+This module has exactly one job: make sure that if `auth` changes the shape of an event, every consumer of that event **fails to compile** instead of silently breaking at runtime on a JSON field mismatch.
 
-This module acts as a contract layer between microservices. Each DTO defines the shape of a message exchanged over Kafka. Keeping them in a single shared module ensures all producers and consumers stay in sync.
+---
 
-## Package Structure
+## What's in here
 
-```
-shared/
-└── messaging/
-    └── kafka/
-        └── dtos/
-            ├── welcome_email.go
-            └── user_logged_in.go
-```
-
-## DTOs
-
-### Kafka — `messaging/kafka/dtos`
-
-| Struct | Topic | Published by | Consumed by |
-|---|---|---|---|
-| `WelcomeEmail` | `user.created` | auth | email |
-| `UserLoggedIn` | `user.logged_in` | auth | broadcasting |
-
-#### `WelcomeEmail`
-
-```go
-type WelcomeEmail struct {
-    Email           string `json:"email"`
-    Name            string `json:"name"`
-    VerificationURL string `json:"verification_url"`
-}
+```text
+messaging/kafka/
+├── dtos/
+│   ├── welcome_email.go     # published by auth on user.created, consumed by email
+│   ├── user_logged_in.go    # published by auth on user.logged_in, consumed by broadcasting
+│   └── stress_email.go      # synthetic load payload, published by auth/email's /api/stress
+└── constants/
+    └── routing_key.go       # the Kafka topic names, defined once
 ```
 
-#### `UserLoggedIn`
+---
 
-```go
-type UserLoggedIn struct {
-    Email string `json:"email"`
-    Name  string `json:"name"`
-}
+## How it's consumed
+
+Each of the three services checks this repository out as a **git submodule**, nested at `<service>/internal/shared`. All three point at the same commit of this repository, which the root `go-app` repo's Makefile enforces:
+
+```bash
+make check-shared-drift   # fails if the 3 services aren't on the same commit of this repo
+make sync-shared FROM=auth  # propagate a change made in one service to the other two
 ```
 
-## Usage
-
-Import the module using its Go module path:
-
-```go
-import dtos "github.com/guille1988/go-app-shared/messaging/kafka/dtos"
-```
-
-## Extending
-
-To add a new DTO, create the corresponding file under `messaging/kafka/dtos/`:
+Each service's `go.mod` currently resolves this module via a local `replace` directive against that submodule checkout, rather than a tagged, remotely-fetched version:
 
 ```
-messaging/
-└── kafka/
-    └── dtos/
-        └── some_event.go   // package dtos
+require github.com/guille1988/go-app-shared v0.0.0
+replace github.com/guille1988/go-app-shared => ./internal/shared
 ```
 
-Follow the same struct + JSON tag conventions used in the existing DTOs.
+This keeps the workflow simple for a 3-service system with a single maintainer, at the cost of relying on the Makefile (rather than Go's module resolution) to guarantee the three checkouts never drift. Migrating to a real tagged dependency (`go get github.com/guille1988/go-app-shared@v0.1.0`, no `replace`) is a natural next step if this system grows to more services or more contributors.
+
+---
+
+## Adding a new event
+
+1. Add the DTO here, in `messaging/kafka/dtos/`.
+2. Add its routing key to `messaging/kafka/constants/routing_key.go`.
+3. Push this repo, then run `make sync-shared FROM=<service>` from `go-app` to propagate the new commit to the other two services' submodule checkouts.
+4. Register the DTO on the publishing side and the handler on the consuming side (see the "Messaging" section in each service's own README).
