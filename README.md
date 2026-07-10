@@ -1,8 +1,8 @@
 # go-app-shared
 
-The versioned Kafka contract shared by [`auth`](https://github.com/guille1988/auth), [`email`](https://github.com/guille1988/email), and [`broadcasting`](https://github.com/guille1988/broadcasting) — the DTOs and routing keys that flow between them.
+The versioned cross-service contracts shared by [`auth`](https://github.com/guille1988/auth), [`email`](https://github.com/guille1988/email), and [`broadcasting`](https://github.com/guille1988/broadcasting) — the Kafka DTOs/routing keys and the gRPC proto definitions that flow between them.
 
-This module has exactly one job: make sure that if `auth` changes the shape of an event, every consumer of that event **fails to compile** instead of silently breaking at runtime on a JSON field mismatch.
+This module has exactly one job: make sure that if a service changes the shape of a contract (a Kafka event or a gRPC message), every other service compiled against it **fails to compile** instead of silently breaking at runtime.
 
 ---
 
@@ -16,7 +16,14 @@ messaging/kafka/
 │   └── stress_email.go      # synthetic load payload, published by auth/email's /api/stress
 └── constants/
     └── routing_key.go       # the Kafka topic names, defined once
+rpc/
+└── auth/v1/
+    ├── auth.proto           # AuthService gRPC contract (served by auth, called by broadcasting)
+    ├── auth.pb.go           # generated — do not edit; regenerate with `make proto`
+    └── auth_grpc.pb.go      # generated — do not edit; regenerate with `make proto`
 ```
+
+The layout under `rpc/` is `rpc/<owning-service>/<version>/`: each service that exposes RPCs owns its own proto package (e.g. a future `rpc/email/v1/`), and the generated Go code is committed so consumers build without needing protoc.
 
 ---
 
@@ -46,3 +53,10 @@ This keeps the workflow simple for a 3-service system with a single maintainer, 
 2. Add its routing key to `messaging/kafka/constants/routing_key.go`.
 3. Push this repo, then run `make sync-shared FROM=<service>` from `go-app` to propagate the new commit to the other two services' submodule checkouts.
 4. Register the DTO on the publishing side and the handler on the consuming side (see the "Messaging" section in each service's own README).
+
+## Adding or changing a gRPC contract
+
+1. Edit (or add) the `.proto` under `rpc/<owning-service>/<version>/` in **auth's** checkout of this repo (`microservices/auth/internal/shared`).
+2. From the `go-app` root, run `make proto` — it runs protoc in docker with pinned plugin versions and regenerates the `*.pb.go` files in place.
+3. Commit the `.proto` together with the regenerated files, then propagate with `make sync-shared FROM=auth`.
+4. Enum style note: enums are nested inside the message that uses them so their values don't need an enum-name prefix (top-level proto3 enum values share the package scope and would collide).

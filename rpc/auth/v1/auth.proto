@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package auth.v1;
+
+option go_package = "github.com/guille1988/go-app-shared/rpc/auth/v1;authv1";
+
+// AuthService exposes auth's token operations to other services over gRPC.
+service AuthService {
+  rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+}
+
+message ValidateTokenRequest {
+  string token = 1;
+}
+
+message ValidateTokenResponse {
+  /*
+   Reason is nested so its values stay scoped to this message and need no
+   enum-name prefix (top-level proto3 enum values share the package scope).
+   */
+  enum Reason {
+    UNSPECIFIED = 0;
+    MALFORMED = 1;
+    EXPIRED = 2;
+    WRONG_PURPOSE = 3;
+    REVOKED = 4; // reserved for the Redis session check (iteration 2)
+  }
+
+  bool valid = 1;
+  string user_uuid = 2;
+  Reason reason = 3;
+}
