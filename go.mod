@@ -1,6 +1,6 @@
 module github.com/guille1988/go-app-shared
 
-go 1.25.0
+go 1.27.0
 
 require (
 	google.golang.org/grpc v1.79.1
